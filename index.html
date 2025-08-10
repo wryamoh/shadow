@@ -26,11 +26,6 @@
     margin-bottom: 20px;
     font-style: italic;
   }
-  label {
-    display: block;
-    margin-top: 10px;
-    font-weight: bold;
-  }
   textarea {
     width: 100%;
     height: 160px;
@@ -42,9 +37,13 @@
     resize: vertical;
     box-sizing: border-box;
   }
+  textarea::placeholder {
+    color: #999;
+  }
   input[type="file"] {
     margin-top: 10px;
     width: 100%;
+    font-size: 16px;
   }
   #waveform {
     margin-top: 15px;
@@ -56,12 +55,11 @@
   .controls {
     margin-top: 15px;
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
+    gap: 10px;
   }
-  .controls button {
-    flex: 1;
-    margin: 0 5px;
-    padding: 10px 0;
+  .controls button, .controls select {
+    padding: 10px 15px;
     font-size: 16px;
     cursor: pointer;
     border: none;
@@ -70,8 +68,12 @@
     border-radius: 6px;
     transition: background-color 0.3s ease;
   }
-  .controls button:hover {
+  .controls button:hover, .controls select:hover {
     background-color: #3367d6;
+  }
+  .controls button:disabled, .controls select:disabled {
+    background-color: #aaa;
+    cursor: default;
   }
   #transcriptDisplay {
     margin-top: 15px;
@@ -114,15 +116,13 @@
     h1 {
       font-size: 2em;
     }
-    .controls button {
+    .controls button, .controls select {
       font-size: 14px;
-      padding: 8px 0;
-      margin: 0 3px;
+      padding: 8px 10px;
     }
   }
 </style>
 
-<!-- لود wavesurfer از CDN -->
 <script src="https://unpkg.com/wavesurfer.js"></script>
 </head>
 <body>
@@ -130,12 +130,7 @@
 <h1>Shadow</h1>
 <div id="logo-subtitle">Created by WRYA</div>
 
-<label for="transcriptInput">Paste Transcript Here (Format: [mm:ss.mmm - mm:ss.mmm] English Persian):</label>
-<textarea id="transcriptInput" placeholder='مثال:
-[00:00.000 - 00:02.000] Hello سلام
-[00:02.001 - 00:05.000] How are you? چطوری؟'></textarea>
-
-<label for="audioFileInput">Upload Audio File:</label>
+<textarea id="transcriptInput" placeholder="Insert transcript here (Format: [mm:ss.mmm - mm:ss.mmm] English Persian)"></textarea>
 <input type="file" id="audioFileInput" accept="audio/*" />
 
 <div id="waveform"></div>
@@ -144,12 +139,16 @@
   <button id="prevBtn" disabled>Previous</button>
   <button id="playPauseBtn" disabled>Play</button>
   <button id="nextBtn" disabled>Next</button>
+  <select id="segmentCount" title="Number of segments to play" disabled>
+    <option value="1" selected>1</option>
+    <option value="2">2</option>
+    <option value="3">3</option>
+  </select>
 </div>
 
 <div id="transcriptDisplay"></div>
 
 <script>
-  // آماده‌سازی wavesurfer
   const wavesurfer = WaveSurfer.create({
     container: '#waveform',
     waveColor: '#a0a0a0',
@@ -165,6 +164,7 @@
   const prevBtn = document.getElementById('prevBtn');
   const nextBtn = document.getElementById('nextBtn');
   const playPauseBtn = document.getElementById('playPauseBtn');
+  const segmentCountSelect = document.getElementById('segmentCount');
 
   let transcript = [];
   let currentIndex = 0;
@@ -180,6 +180,7 @@
       clearHighlight();
       updateButtons();
       playPauseBtn.disabled = false;
+      segmentCountSelect.disabled = false;
     }
   });
 
@@ -224,7 +225,7 @@
       `;
       div.onclick = () => {
         currentIndex = i;
-        playSegment(i);
+        playSegments(currentIndex);
       };
       transcriptDisplay.appendChild(div);
     });
@@ -251,25 +252,39 @@
     document.querySelectorAll('.line.highlight').forEach(el => el.classList.remove('highlight'));
   }
 
-  // پخش جمله فعلی
-  function playSegment(idx) {
-    if(!transcript[idx]) return;
-    highlightLine(idx);
-    wavesurfer.seekTo(transcript[idx].start / wavesurfer.getDuration());
+  // پخش سگمنت(های) فعلی براساس مقدار کشویی
+  function playSegments(startIdx) {
+    if(!transcript.length) return;
+    const count = parseInt(segmentCountSelect.value);
+    let endIdx = Math.min(startIdx + count - 1, transcript.length - 1);
+    let startTime = transcript[startIdx].start;
+    let endTime = transcript[endIdx].end;
+
+    highlightLine(startIdx);
+    if (count > 1) {
+      // هایلایت همه سگمنت های در حال پخش
+      for(let i = startIdx + 1; i <= endIdx; i++) {
+        const el = document.getElementById('line-' + i);
+        if(el) el.classList.add('highlight');
+      }
+    }
+
+    wavesurfer.seekTo(startTime / wavesurfer.getDuration());
     wavesurfer.play();
     isPlaying = true;
     playPauseBtn.textContent = 'Pause';
 
-    function checkTime() {
-      if(wavesurfer.getCurrentTime() >= transcript[idx].end) {
+    function onAudioProcess() {
+      if(wavesurfer.getCurrentTime() >= endTime) {
         wavesurfer.pause();
         isPlaying = false;
         playPauseBtn.textContent = 'Play';
-        wavesurfer.un('audioprocess', checkTime);
+        wavesurfer.un('audioprocess', onAudioProcess);
       }
     }
-    wavesurfer.on('audioprocess', checkTime);
-    currentIndex = idx;
+    wavesurfer.on('audioprocess', onAudioProcess);
+
+    currentIndex = endIdx;
     updateButtons();
   }
 
@@ -281,15 +296,15 @@
       isPlaying = false;
     } else {
       if(currentIndex >= transcript.length) currentIndex = 0;
-      playSegment(currentIndex);
+      playSegments(currentIndex);
     }
   };
 
   // دکمه Next
   nextBtn.onclick = () => {
-    if(currentIndex < transcript.length -1) {
+    if(currentIndex < transcript.length - 1) {
       currentIndex++;
-      playSegment(currentIndex);
+      playSegments(currentIndex);
     }
   };
 
@@ -297,18 +312,22 @@
   prevBtn.onclick = () => {
     if(currentIndex > 0) {
       currentIndex--;
-      playSegment(currentIndex);
+      playSegments(currentIndex);
     }
   };
 
   // بروزرسانی وضعیت دکمه‌ها
   function updateButtons() {
     prevBtn.disabled = (currentIndex <= 0);
-    nextBtn.disabled = (currentIndex >= transcript.length -1);
+    nextBtn.disabled = (currentIndex >= transcript.length - 1);
     if(!transcript.length) {
       prevBtn.disabled = true;
       nextBtn.disabled = true;
       playPauseBtn.disabled = true;
+      segmentCountSelect.disabled = true;
+    } else {
+      playPauseBtn.disabled = false;
+      segmentCountSelect.disabled = false;
     }
   }
 </script>
