@@ -143,7 +143,7 @@
 <h1>Shadow</h1>
 <div id="logo-subtitle">Created by WRYA</div>
 
-<textarea id="transcriptInput" placeholder="Insert transcript here (Format: [mm:ss.mmm - mm:ss.mmm] English Persian)"></textarea>
+<textarea id="transcriptInput" placeholder="Insert transcript here (Format: [mm:ss.mmm - mm:ss.mmm][English\Persian])"></textarea>
 <input type="file" id="audioFileInput" accept="audio/*" />
 
 <div id="waveform"></div>
@@ -201,8 +201,8 @@
     const lines = text.trim().split('\n');
     const parsed = [];
     for(let line of lines) {
-      // فرمت: [mm:ss.mmm - mm:ss.mmm] English Persian
-      const match = line.match(/^\[(\d{2}):(\d{2}\.\d{3}) - (\d{2}):(\d{2}\.\d{3})\]\s+(.+?)\s+(.+)$/);
+      // فرمت: [mm:ss.mmm - mm:ss.mmm][English\Persian]
+      const match = line.match(/^\[(\d{2}):(\d{2}\.\d{3}) - (\d{2}):(\d{2}\.\d{3})\]\[(.+)\\(.+)\]$/);
       if(match) {
         const start = parseInt(match[1])*60 + parseFloat(match[2]);
         const end = parseInt(match[3])*60 + parseFloat(match[4]);
