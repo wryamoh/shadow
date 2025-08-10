@@ -1,21 +1,22 @@
 <!DOCTYPE html>
-<html lang="fa">
+<html lang="fa" dir="rtl">
 <head>
 <meta charset="UTF-8" />
-<title>Shadowing Practice</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Shadowing Player</title>
 <style>
   body {
     font-family: Arial, sans-serif;
     max-width: 700px;
     margin: auto;
-    padding: 20px;
+    padding: 10px 15px;
     background: #f9f9f9;
     direction: rtl;
   }
   h1 {
     text-align: center;
     font-weight: bold;
-    font-size: 3em;
+    font-size: 2.8em;
     margin-bottom: 5px;
   }
   #logo-subtitle {
@@ -25,39 +26,66 @@
     margin-bottom: 20px;
     font-style: italic;
   }
+  label {
+    display: block;
+    margin-top: 10px;
+    font-weight: bold;
+  }
   textarea {
     width: 100%;
-    height: 180px;
+    height: 160px;
     padding: 10px;
     font-size: 16px;
     font-family: monospace;
-    border-radius: 8px;
+    border-radius: 6px;
     border: 1px solid #ccc;
     resize: vertical;
     box-sizing: border-box;
   }
-  label, select, input[type="file"], button {
-    display: block;
+  input[type="file"] {
+    margin-top: 10px;
     width: 100%;
-    margin: 10px 0;
-    font-size: 16px;
-    box-sizing: border-box;
   }
-  audio {
-    width: 100%;
+  #waveform {
     margin-top: 15px;
+    width: 100%;
+    height: 100px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
   }
-  .transcript {
+  .controls {
+    margin-top: 15px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .controls button {
+    flex: 1;
+    margin: 0 5px;
+    padding: 10px 0;
+    font-size: 16px;
+    cursor: pointer;
+    border: none;
+    background-color: #4285f4;
+    color: white;
+    border-radius: 6px;
+    transition: background-color 0.3s ease;
+  }
+  .controls button:hover {
+    background-color: #3367d6;
+  }
+  #transcriptDisplay {
     margin-top: 15px;
     background: white;
     padding: 15px;
-    border-radius: 8px;
+    border-radius: 6px;
     max-height: 280px;
     overflow-y: auto;
     border: 1px solid #ddd;
+    font-size: 14px;
+    line-height: 1.5em;
   }
   .line {
-    padding: 8px;
+    padding: 6px;
     cursor: pointer;
     border-bottom: 1px solid #eee;
   }
@@ -67,175 +95,221 @@
   .line.highlight {
     background-color: #ffff99;
   }
-  .controls {
-    margin-top: 15px;
-    display: flex;
-    justify-content: space-between;
+  .time {
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 2px;
   }
-  .controls button, .controls select {
-    width: 32%;
-    padding: 10px;
-    font-size: 16px;
+  .en-text {
+    font-weight: 600;
+  }
+  .fa-text {
+    color: #666;
+    font-style: italic;
+  }
+  @media(max-width: 480px) {
+    body {
+      padding: 8px 10px;
+    }
+    h1 {
+      font-size: 2em;
+    }
+    .controls button {
+      font-size: 14px;
+      padding: 8px 0;
+      margin: 0 3px;
+    }
   }
 </style>
+
+<!-- لود wavesurfer از CDN -->
+<script src="https://unpkg.com/wavesurfer.js"></script>
 </head>
 <body>
 
 <h1>Shadow</h1>
 <div id="logo-subtitle">Created by WRYA</div>
 
-<label for="transcriptInput">Paste Transcript JSON here:</label>
-<textarea id="transcriptInput" placeholder='[
-  {"start":0,"end":2,"text":"Hello world","fa_text":"سلام دنیا"},
-  {"start":2,"end":5,"text":"How are you?","fa_text":"چطوری؟"}
-]'></textarea>
+<label for="transcriptInput">Paste Transcript Here (Format: [mm:ss.mmm - mm:ss.mmm] English Persian):</label>
+<textarea id="transcriptInput" placeholder='مثال:
+[00:00.000 - 00:02.000] Hello سلام
+[00:02.001 - 00:05.000] How are you? چطوری؟'></textarea>
 
 <label for="audioFileInput">Upload Audio File:</label>
 <input type="file" id="audioFileInput" accept="audio/*" />
 
-<audio id="audioPlayer" controls></audio>
+<div id="waveform"></div>
 
 <div class="controls">
   <button id="prevBtn" disabled>Previous</button>
-  <select id="segmentCount">
-    <option value="1">1 Segment</option>
-    <option value="2">2 Segments</option>
-    <option value="3">3 Segments</option>
-  </select>
+  <button id="playPauseBtn" disabled>Play</button>
   <button id="nextBtn" disabled>Next</button>
 </div>
 
-<div class="transcript" id="transcriptDisplay">
-  <!-- Transcript lines will appear here -->
-</div>
+<div id="transcriptDisplay"></div>
 
 <script>
-  const audioPlayer = document.getElementById('audioPlayer');
-  const audioFileInput = document.getElementById('audioFileInput');
+  // آماده‌سازی wavesurfer
+  const wavesurfer = WaveSurfer.create({
+    container: '#waveform',
+    waveColor: '#a0a0a0',
+    progressColor: '#4285f4',
+    cursorColor: '#000',
+    height: 100,
+    responsive: true
+  });
+
   const transcriptInput = document.getElementById('transcriptInput');
+  const audioFileInput = document.getElementById('audioFileInput');
   const transcriptDisplay = document.getElementById('transcriptDisplay');
   const prevBtn = document.getElementById('prevBtn');
   const nextBtn = document.getElementById('nextBtn');
-  const segmentCountSelect = document.getElementById('segmentCount');
+  const playPauseBtn = document.getElementById('playPauseBtn');
 
   let transcript = [];
   let currentIndex = 0;
+  let isPlaying = false;
 
-  // وقتی فایل صوتی آپلود می‌شود
+  // بارگذاری فایل صوتی
   audioFileInput.addEventListener('change', () => {
     const file = audioFileInput.files[0];
-    if (file) {
+    if(file) {
       const url = URL.createObjectURL(file);
-      audioPlayer.src = url;
+      wavesurfer.load(url);
       currentIndex = 0;
       clearHighlight();
       updateButtons();
+      playPauseBtn.disabled = false;
     }
   });
 
-  // وقتی متن ترنسکریپت تغییر می‌کند یا وارد می‌شود
-  transcriptInput.addEventListener('input', () => {
-    try {
-      const parsed = JSON.parse(transcriptInput.value);
-      if (Array.isArray(parsed)) {
-        transcript = parsed;
-        currentIndex = 0;
-        renderTranscript();
-        updateButtons();
-        clearHighlight();
+  // تبدیل متن ترنسکریپت از فرمت دلخواه به آرایه
+  function parseTranscript(text) {
+    const lines = text.trim().split('\n');
+    const parsed = [];
+    for(let line of lines) {
+      // فرمت: [mm:ss.mmm - mm:ss.mmm] English Persian
+      const match = line.match(/^\[(\d{2}):(\d{2}\.\d{3}) - (\d{2}):(\d{2}\.\d{3})\]\s+(.+?)\s+(.*)$/);
+      if(match) {
+        const start = parseInt(match[1])*60 + parseFloat(match[2]);
+        const end = parseInt(match[3])*60 + parseFloat(match[4]);
+        const enText = match[5];
+        const faText = match[6];
+        parsed.push({start, end, text: enText, fa_text: faText});
       }
-    } catch(e) {
-      transcriptDisplay.innerHTML = "<div style='color:red'>Invalid JSON format!</div>";
-      transcript = [];
-      updateButtons();
     }
+    return parsed;
+  }
+
+  // وقتی متن ترنسکریپت تغییر می‌کند
+  transcriptInput.addEventListener('input', () => {
+    transcript = parseTranscript(transcriptInput.value);
+    currentIndex = 0;
+    renderTranscript();
+    updateButtons();
+    clearHighlight();
   });
 
-  // نمایش متن ترنسکریپت
+  // نمایش ترنسکریپت
   function renderTranscript() {
     transcriptDisplay.innerHTML = '';
-    transcript.forEach((segment, i) => {
+    transcript.forEach((seg,i) => {
       const div = document.createElement('div');
       div.className = 'line';
       div.id = 'line-' + i;
-      div.innerHTML = `<strong>[${formatTime(segment.start)} - ${formatTime(segment.end)}]</strong><br>${segment.text}<br><em>${segment.fa_text || ''}</em>`;
+      div.innerHTML = `
+        <div class="time">[${formatTime(seg.start)} - ${formatTime(seg.end)}]</div>
+        <div class="en-text">${seg.text}</div>
+        <div class="fa-text">${seg.fa_text}</div>
+      `;
       div.onclick = () => {
         currentIndex = i;
-        playSegments();
+        playSegment(i);
       };
       transcriptDisplay.appendChild(div);
     });
   }
 
-  // پخش سگمنت‌ها
-  function playSegments() {
+  // فرمت زمان به mm:ss.mmm
+  function formatTime(sec) {
+    const m = Math.floor(sec/60);
+    const s = (sec%60).toFixed(3);
+    const sParts = s.split('.');
+    return `${String(m).padStart(2,'0')}:${sParts[0].padStart(2,'0')}.${sParts[1]}`;
+  }
+
+  // هایلایت کردن جمله فعلی
+  function highlightLine(idx) {
     clearHighlight();
-    const count = parseInt(segmentCountSelect.value) || 1;
-    if(currentIndex >= transcript.length) return;
-
-    const start = transcript[currentIndex].start;
-    const endIndex = Math.min(currentIndex + count -1, transcript.length -1);
-    const end = transcript[endIndex].end;
-
-    highlightSegments(currentIndex, endIndex);
-
-    audioPlayer.currentTime = start;
-    audioPlayer.play();
-
-    function onTimeUpdate() {
-      if (audioPlayer.currentTime >= end) {
-        audioPlayer.pause();
-        audioPlayer.removeEventListener('timeupdate', onTimeUpdate);
-      }
-    }
-    audioPlayer.addEventListener('timeupdate', onTimeUpdate);
-
-    currentIndex = endIndex;
-    updateButtons();
+    const el = document.getElementById('line-' + idx);
+    if(el) el.classList.add('highlight');
+    el.scrollIntoView({behavior: 'smooth', block: 'nearest'});
   }
 
-  // دکمه قبلی
-  prevBtn.onclick = () => {
-    if (currentIndex > 0) {
-      currentIndex--;
-      playSegments();
-      updateButtons();
-    }
-  };
-
-  // دکمه بعدی
-  nextBtn.onclick = () => {
-    if (currentIndex < transcript.length -1) {
-      currentIndex++;
-      playSegments();
-      updateButtons();
-    }
-  };
-
-  // هایلایت کردن خطوط
-  function highlightSegments(startIdx, endIdx) {
-    for(let i = startIdx; i <= endIdx; i++) {
-      const el = document.getElementById('line-' + i);
-      if(el) el.classList.add('highlight');
-    }
-  }
-
-  // پاک کردن هایلایت
+  // پاک کردن همه هایلایت‌ها
   function clearHighlight() {
     document.querySelectorAll('.line.highlight').forEach(el => el.classList.remove('highlight'));
   }
 
-  // آپدیت دکمه‌ها
+  // پخش جمله فعلی
+  function playSegment(idx) {
+    if(!transcript[idx]) return;
+    highlightLine(idx);
+    wavesurfer.seekTo(transcript[idx].start / wavesurfer.getDuration());
+    wavesurfer.play();
+    isPlaying = true;
+    playPauseBtn.textContent = 'Pause';
+
+    function checkTime() {
+      if(wavesurfer.getCurrentTime() >= transcript[idx].end) {
+        wavesurfer.pause();
+        isPlaying = false;
+        playPauseBtn.textContent = 'Play';
+        wavesurfer.un('audioprocess', checkTime);
+      }
+    }
+    wavesurfer.on('audioprocess', checkTime);
+    currentIndex = idx;
+    updateButtons();
+  }
+
+  // دکمه Play/Pause
+  playPauseBtn.onclick = () => {
+    if(isPlaying) {
+      wavesurfer.pause();
+      playPauseBtn.textContent = 'Play';
+      isPlaying = false;
+    } else {
+      if(currentIndex >= transcript.length) currentIndex = 0;
+      playSegment(currentIndex);
+    }
+  };
+
+  // دکمه Next
+  nextBtn.onclick = () => {
+    if(currentIndex < transcript.length -1) {
+      currentIndex++;
+      playSegment(currentIndex);
+    }
+  };
+
+  // دکمه Previous
+  prevBtn.onclick = () => {
+    if(currentIndex > 0) {
+      currentIndex--;
+      playSegment(currentIndex);
+    }
+  };
+
+  // بروزرسانی وضعیت دکمه‌ها
   function updateButtons() {
     prevBtn.disabled = (currentIndex <= 0);
     nextBtn.disabled = (currentIndex >= transcript.length -1);
-  }
-
-  // فرمت زمان به mm:ss
-  function formatTime(seconds) {
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+    if(!transcript.length) {
+      prevBtn.disabled = true;
+      nextBtn.disabled = true;
+      playPauseBtn.disabled = true;
+    }
   }
 </script>
 
