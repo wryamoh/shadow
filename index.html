@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+<meta charset="UTF-8" />
+<title>Shadowing Practice</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    max-width: 700px;
+    margin: auto;
+    padding: 20px;
+    background: #f9f9f9;
+    direction: rtl;
+  }
+  h1 {
+    text-align: center;
+    font-weight: bold;
+    font-size: 3em;
+    margin-bottom: 5px;
+  }
+  #logo-subtitle {
+    text-align: center;
+    font-size: 0.9em;
+    color: #555;
+    margin-bottom: 20px;
+    font-style: italic;
+  }
+  textarea {
+    width: 100%;
+    height: 180px;
+    padding: 10px;
+    font-size: 16px;
+    font-family: monospace;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    resize: vertical;
+    box-sizing: border-box;
+  }
+  label, select, input[type="file"], button {
+    display: block;
+    width: 100%;
+    margin: 10px 0;
+    font-size: 16px;
+    box-sizing: border-box;
+  }
+  audio {
+    width: 100%;
+    margin-top: 15px;
+  }
+  .transcript {
+    margin-top: 15px;
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    max-height: 280px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+  }
+  .line {
+    padding: 8px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+  }
+  .line:last-child {
+    border-bottom: none;
+  }
+  .line.highlight {
+    background-color: #ffff99;
+  }
+  .controls {
+    margin-top: 15px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .controls button, .controls select {
+    width: 32%;
+    padding: 10px;
+    font-size: 16px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Shadow</h1>
+<div id="logo-subtitle">Created by WRYA</div>
+
+<label for="transcriptInput">Paste Transcript JSON here:</label>
+<textarea id="transcriptInput" placeholder='[
+  {"start":0,"end":2,"text":"Hello world","fa_text":"سلام دنیا"},
+  {"start":2,"end":5,"text":"How are you?","fa_text":"چطوری؟"}
+]'></textarea>
+
+<label for="audioFileInput">Upload Audio File:</label>
+<input type="file" id="audioFileInput" accept="audio/*" />
+
+<audio id="audioPlayer" controls></audio>
+
+<div class="controls">
+  <button id="prevBtn" disabled>Previous</button>
+  <select id="segmentCount">
+    <option value="1">1 Segment</option>
+    <option value="2">2 Segments</option>
+    <option value="3">3 Segments</option>
+  </select>
+  <button id="nextBtn" disabled>Next</button>
+</div>
+
+<div class="transcript" id="transcriptDisplay">
+  <!-- Transcript lines will appear here -->
+</div>
+
+<script>
+  const audioPlayer = document.getElementById('audioPlayer');
+  const audioFileInput = document.getElementById('audioFileInput');
+  const transcriptInput = document.getElementById('transcriptInput');
+  const transcriptDisplay = document.getElementById('transcriptDisplay');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const segmentCountSelect = document.getElementById('segmentCount');
+
+  let transcript = [];
+  let currentIndex = 0;
+
+  // وقتی فایل صوتی آپلود می‌شود
+  audioFileInput.addEventListener('change', () => {
+    const file = audioFileInput.files[0];
+    if (file) {
+      const url = URL.createObjectURL(file);
+      audioPlayer.src = url;
+      currentIndex = 0;
+      clearHighlight();
+      updateButtons();
+    }
+  });
+
+  // وقتی متن ترنسکریپت تغییر می‌کند یا وارد می‌شود
+  transcriptInput.addEventListener('input', () => {
+    try {
+      const parsed = JSON.parse(transcriptInput.value);
+      if (Array.isArray(parsed)) {
+        transcript = parsed;
+        currentIndex = 0;
+        renderTranscript();
+        updateButtons();
+        clearHighlight();
+      }
+    } catch(e) {
+      transcriptDisplay.innerHTML = "<div style='color:red'>Invalid JSON format!</div>";
+      transcript = [];
+      updateButtons();
+    }
+  });
+
+  // نمایش متن ترنسکریپت
+  function renderTranscript() {
+    transcriptDisplay.innerHTML = '';
+    transcript.forEach((segment, i) => {
+      const div = document.createElement('div');
+      div.className = 'line';
+      div.id = 'line-' + i;
+      div.innerHTML = `<strong>[${formatTime(segment.start)} - ${formatTime(segment.end)}]</strong><br>${segment.text}<br><em>${segment.fa_text || ''}</em>`;
+      div.onclick = () => {
+        currentIndex = i;
+        playSegments();
+      };
+      transcriptDisplay.appendChild(div);
+    });
+  }
+
+  // پخش سگمنت‌ها
+  function playSegments() {
+    clearHighlight();
+    const count = parseInt(segmentCountSelect.value) || 1;
+    if(currentIndex >= transcript.length) return;
+
+    const start = transcript[currentIndex].start;
+    const endIndex = Math.min(currentIndex + count -1, transcript.length -1);
+    const end = transcript[endIndex].end;
+
+    highlightSegments(currentIndex, endIndex);
+
+    audioPlayer.currentTime = start;
+    audioPlayer.play();
+
+    function onTimeUpdate() {
+      if (audioPlayer.currentTime >= end) {
+        audioPlayer.pause();
+        audioPlayer.removeEventListener('timeupdate', onTimeUpdate);
+      }
+    }
+    audioPlayer.addEventListener('timeupdate', onTimeUpdate);
+
+    currentIndex = endIndex;
+    updateButtons();
+  }
+
+  // دکمه قبلی
+  prevBtn.onclick = () => {
+    if (currentIndex > 0) {
+      currentIndex--;
+      playSegments();
+      updateButtons();
+    }
+  };
+
+  // دکمه بعدی
+  nextBtn.onclick = () => {
+    if (currentIndex < transcript.length -1) {
+      currentIndex++;
+      playSegments();
+      updateButtons();
+    }
+  };
+
+  // هایلایت کردن خطوط
+  function highlightSegments(startIdx, endIdx) {
+    for(let i = startIdx; i <= endIdx; i++) {
+      const el = document.getElementById('line-' + i);
+      if(el) el.classList.add('highlight');
+    }
+  }
+
+  // پاک کردن هایلایت
+  function clearHighlight() {
+    document.querySelectorAll('.line.highlight').forEach(el => el.classList.remove('highlight'));
+  }
+
+  // آپدیت دکمه‌ها
+  function updateButtons() {
+    prevBtn.disabled = (currentIndex <= 0);
+    nextBtn.disabled = (currentIndex >= transcript.length -1);
+  }
+
+  // فرمت زمان به mm:ss
+  function formatTime(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+  }
+</script>
+
+</body>
+</html>
