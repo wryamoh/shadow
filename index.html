@@ -109,10 +109,12 @@
   }
   .en-text {
     font-weight: 600;
+    user-select: text;
   }
   .fa-text {
     color: #666;
     font-style: italic;
+    user-select: text;
   }
   @media(max-width: 480px) {
     body {
@@ -198,7 +200,7 @@
     const parsed = [];
     for(let line of lines) {
       // فرمت: [mm:ss.mmm - mm:ss.mmm] English Persian
-      const match = line.match(/^\[(\d{2}):(\d{2}\.\d{3}) - (\d{2}):(\d{2}\.\d{3})\]\s+(.+?)\s+(.*)$/);
+      const match = line.match(/^\[(\d{2}):(\d{2}\.\d{3}) - (\d{2}):(\d{2}\.\d{3})\]\s+(.+?)\s+(.+)$/);
       if(match) {
         const start = parseInt(match[1])*60 + parseFloat(match[2]);
         const end = parseInt(match[3])*60 + parseFloat(match[4]);
@@ -229,7 +231,8 @@
         <div class="en-text">${seg.text}</div>
         <div class="fa-text">${seg.fa_text}</div>
       `;
-      div.onclick = () => {
+      div.onclick = (e) => {
+        e.stopPropagation();
         currentIndex = i;
         playSegments(currentIndex);
       };
