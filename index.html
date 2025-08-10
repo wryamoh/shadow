@@ -95,6 +95,7 @@
     padding: 6px;
     cursor: pointer;
     border-bottom: 1px solid #eee;
+    user-select: none;
   }
   .line:last-child {
     border-bottom: none;
@@ -181,6 +182,7 @@
   let transcript = [];
   let currentIndex = 0;
   let isPlaying = false;
+  let segmentEndTime = 0;
 
   audioFileInput.addEventListener('change', () => {
     const file = audioFileInput.files[0];
@@ -204,8 +206,8 @@
       if(match) {
         const start = parseInt(match[1])*60 + parseFloat(match[2]);
         const end = parseInt(match[3])*60 + parseFloat(match[4]);
-        const enText = match[5];
-        const faText = match[6];
+        const enText = match[5].trim();
+        const faText = match[6].trim();
         parsed.push({start, end, text: enText, fa_text: faText});
       }
     }
@@ -231,8 +233,7 @@
         <div class="en-text">${seg.text}</div>
         <div class="fa-text">${seg.fa_text}</div>
       `;
-      div.onclick = (e) => {
-        e.stopPropagation();
+      div.onclick = () => {
         currentIndex = i;
         playSegments(currentIndex);
       };
@@ -247,11 +248,14 @@
     return `${String(m).padStart(2,'0')}:${sParts[0].padStart(2,'0')}.${sParts[1]}`;
   }
 
-  function highlightLine(idx) {
+  function highlightLines(startIdx, count) {
     clearHighlight();
-    const el = document.getElementById('line-' + idx);
-    if(el) el.classList.add('highlight');
-    el.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+    for(let i = startIdx; i < startIdx + count && i < transcript.length; i++) {
+      const el = document.getElementById('line-' + i);
+      if(el) el.classList.add('highlight');
+    }
+    const firstLine = document.getElementById('line-' + startIdx);
+    if(firstLine) firstLine.scrollIntoView({behavior: 'smooth', block: 'nearest'});
   }
 
   function clearHighlight() {
@@ -261,40 +265,35 @@
   function playSegments(startIdx) {
     if(!transcript.length) return;
     const count = parseInt(segmentCountSelect.value);
-    let endIdx = Math.min(startIdx + count - 1, transcript.length - 1);
-    let startTime = transcript[startIdx].start;
-    let endTime = transcript[endIdx].end;
+    const endIdx = Math.min(startIdx + count - 1, transcript.length - 1);
+    const startTime = transcript[startIdx].start;
+    segmentEndTime = transcript[endIdx].end;
 
-    clearHighlight();
-    for(let i = startIdx; i <= endIdx; i++) {
-      const el = document.getElementById('line-' + i);
-      if(el) el.classList.add('highlight');
-    }
+    highlightLines(startIdx, count);
 
     wavesurfer.seekTo(startTime / wavesurfer.getDuration());
     wavesurfer.play();
     isPlaying = true;
     playPauseBtn.textContent = 'Pause';
 
-    function onAudioProcess() {
-      if(wavesurfer.getCurrentTime() >= endTime) {
-        wavesurfer.pause();
-        isPlaying = false;
-        playPauseBtn.textContent = 'Play';
-        wavesurfer.un('audioprocess', onAudioProcess);
-      }
-    }
-    wavesurfer.on('audioprocess', onAudioProcess);
-
     currentIndex = endIdx;
     updateButtons();
   }
 
+  // کنترل توقف بعد از پایان سگمنت
+  wavesurfer.on('audioprocess', () => {
+    if(isPlaying && wavesurfer.getCurrentTime() >= segmentEndTime) {
+      wavesurfer.pause();
+      isPlaying = false;
+      playPauseBtn.textContent = 'Play';
+    }
+  });
+
   playPauseBtn.onclick = () => {
     if(isPlaying) {
       wavesurfer.pause();
-      playPauseBtn.textContent = 'Play';
       isPlaying = false;
+      playPauseBtn.textContent = 'Play';
     } else {
       if(currentIndex >= transcript.length) currentIndex = 0;
       playSegments(currentIndex);
