@@ -27,7 +27,8 @@
     font-style: italic;
   }
   textarea {
-    width: 100%;
+    width: 80%;
+    max-width: 450px;
     height: 160px;
     padding: 10px;
     font-size: 16px;
@@ -36,6 +37,8 @@
     border: 1px solid #ccc;
     resize: vertical;
     box-sizing: border-box;
+    display: block;
+    margin: 0 auto 15px auto;
   }
   textarea::placeholder {
     color: #999;
@@ -57,6 +60,7 @@
     display: flex;
     justify-content: center;
     gap: 10px;
+    flex-wrap: wrap;
   }
   .controls button, .controls select {
     padding: 10px 15px;
@@ -67,6 +71,7 @@
     color: white;
     border-radius: 6px;
     transition: background-color 0.3s ease;
+    min-width: 90px;
   }
   .controls button:hover, .controls select:hover {
     background-color: #3367d6;
@@ -116,9 +121,14 @@
     h1 {
       font-size: 2em;
     }
+    textarea {
+      width: 100%;
+      max-width: 100%;
+    }
     .controls button, .controls select {
       font-size: 14px;
       padding: 8px 10px;
+      min-width: 70px;
     }
   }
 </style>
@@ -170,7 +180,6 @@
   let currentIndex = 0;
   let isPlaying = false;
 
-  // بارگذاری فایل صوتی
   audioFileInput.addEventListener('change', () => {
     const file = audioFileInput.files[0];
     if(file) {
@@ -184,7 +193,6 @@
     }
   });
 
-  // تبدیل متن ترنسکریپت از فرمت دلخواه به آرایه
   function parseTranscript(text) {
     const lines = text.trim().split('\n');
     const parsed = [];
@@ -202,7 +210,6 @@
     return parsed;
   }
 
-  // وقتی متن ترنسکریپت تغییر می‌کند
   transcriptInput.addEventListener('input', () => {
     transcript = parseTranscript(transcriptInput.value);
     currentIndex = 0;
@@ -211,7 +218,6 @@
     clearHighlight();
   });
 
-  // نمایش ترنسکریپت
   function renderTranscript() {
     transcriptDisplay.innerHTML = '';
     transcript.forEach((seg,i) => {
@@ -231,7 +237,6 @@
     });
   }
 
-  // فرمت زمان به mm:ss.mmm
   function formatTime(sec) {
     const m = Math.floor(sec/60);
     const s = (sec%60).toFixed(3);
@@ -239,7 +244,6 @@
     return `${String(m).padStart(2,'0')}:${sParts[0].padStart(2,'0')}.${sParts[1]}`;
   }
 
-  // هایلایت کردن جمله فعلی
   function highlightLine(idx) {
     clearHighlight();
     const el = document.getElementById('line-' + idx);
@@ -247,12 +251,10 @@
     el.scrollIntoView({behavior: 'smooth', block: 'nearest'});
   }
 
-  // پاک کردن همه هایلایت‌ها
   function clearHighlight() {
     document.querySelectorAll('.line.highlight').forEach(el => el.classList.remove('highlight'));
   }
 
-  // پخش سگمنت(های) فعلی براساس مقدار کشویی
   function playSegments(startIdx) {
     if(!transcript.length) return;
     const count = parseInt(segmentCountSelect.value);
@@ -260,13 +262,10 @@
     let startTime = transcript[startIdx].start;
     let endTime = transcript[endIdx].end;
 
-    highlightLine(startIdx);
-    if (count > 1) {
-      // هایلایت همه سگمنت های در حال پخش
-      for(let i = startIdx + 1; i <= endIdx; i++) {
-        const el = document.getElementById('line-' + i);
-        if(el) el.classList.add('highlight');
-      }
+    clearHighlight();
+    for(let i = startIdx; i <= endIdx; i++) {
+      const el = document.getElementById('line-' + i);
+      if(el) el.classList.add('highlight');
     }
 
     wavesurfer.seekTo(startTime / wavesurfer.getDuration());
@@ -288,7 +287,6 @@
     updateButtons();
   }
 
-  // دکمه Play/Pause
   playPauseBtn.onclick = () => {
     if(isPlaying) {
       wavesurfer.pause();
@@ -300,7 +298,6 @@
     }
   };
 
-  // دکمه Next
   nextBtn.onclick = () => {
     if(currentIndex < transcript.length - 1) {
       currentIndex++;
@@ -308,7 +305,6 @@
     }
   };
 
-  // دکمه Previous
   prevBtn.onclick = () => {
     if(currentIndex > 0) {
       currentIndex--;
@@ -316,7 +312,6 @@
     }
   };
 
-  // بروزرسانی وضعیت دکمه‌ها
   function updateButtons() {
     prevBtn.disabled = (currentIndex <= 0);
     nextBtn.disabled = (currentIndex >= transcript.length - 1);
